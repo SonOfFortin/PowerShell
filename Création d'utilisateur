@@ -1,0 +1,105 @@
+Clear
+
+$clientId = ""
+$certificateEmpNum = ""
+
+$TenantId=""
+$dataverseEnvUrl = ""
+
+$appId = ""
+$clientSecret = ""
+$oAuthTokenEndpoint = "https://login.microsoftonline.com/$($TenantId)/oauth2/v2.0/token" 
+
+import-module ActiveDirectory
+
+# OAuth Body Access Token Request
+$authBody = 
+@{
+    client_id = $appId;
+    client_secret = $clientSecret;    
+    # The v2 endpoint for OAuth uses scope instead of resource
+    scope = "$($dataverseEnvUrl)/.default"    
+    grant_type = 'client_credentials'
+}
+
+# Parameters for OAuth Access Token Request
+$authParams = 
+@{
+    URI = $oAuthTokenEndpoint
+    Method = 'POST'
+    ContentType = 'application/x-www-form-urlencoded'
+    Body = $authBody
+}
+
+# Get Access Token
+$authRequest = Invoke-RestMethod @authParams -ErrorAction Stop
+$authResponse = $authRequest
+
+##########################################################
+# Call Dataverse WebAPI using Authentication Token
+##########################################################
+
+# Parameters for the Dataverse WebAPI call which includes our header
+# that carries the access token.
+$apiCallParams =
+@{
+    URI = "$($dataverseEnvUrl)/api/data/v9.2/cr279_bdpc_participantses?savedQuery=83a1b5e4-c099-ee11-be37-000d3a0a1a03"
+    Headers = @{
+        "Authorization" = "$($authResponse.token_type) $($authResponse.access_token)" 
+    }
+    Method = 'GET'
+}
+
+$apiCallResponse = ""
+
+# Call the Dataverse WebAPI
+$apiCallResponse = (Invoke-RestMethod @apiCallParams -ErrorAction Stop).value
+
+#Write-Host $apiCallResponse
+
+foreach ($user in $apiCallResponse)
+{
+    Write-Host "--- Participant ---"
+    Write-Host ("Nom de fammille : " + $user.cr279_family_name)
+    Write-Host ("Prenom : " + $user.cr279_first_given_name)
+    Write-Host ("UserName : " + $user.cr279_user_name_new)
+    Write-Host ("Etat : " + $user.cr279_etat)
+    Write-Host ("Statut : " + $user.cr279_statut_recrut)
+    Write-Host ("Group Id : " + $user.a_4d954d703a2d4028ae2e28368fc13390_x002e_cr279_idgroup)
+    Write-Host ("Fin de stage : " + $user.cr279_end_stage)
+    Write-Host ""
+
+    $adUser = ""
+    $adUser = Get-ADUser -SearchBase 'OU=Participants,DC=serv-odyssee,DC=com' -Filter "SamAccountName -eq '$user.cr279_user_name_new'" -ErrorAction Stop
+
+    #Write-Host $adUser
+
+    if($adUser.Count -eq 0)
+    {
+        Write-Host "Not Found"
+
+        #Si l'enregistrement est actif et que le participant est en stage
+        #Création du compte
+        if($user.cr279_etat -eq 0)
+        {
+        }
+    }else
+    {
+        Write-Host "Found"
+
+        #Si l'enregistrement est innactif ou n'est pas retenue on desactive du compte
+        if($user.cr279_etat -eq 1 -or $user.cr279_statut_recrut -eq 2)
+        {
+
+        }else{
+            #Si le stage est terminer on mais une date de desactivation du compte
+            #Si la date n'est pas assigne on mais la date du jour
+            if($user.cr279_end_stage -eq "1970-01-01T00:00:00Z")
+            {
+
+            }else{
+
+            }
+        }
+    }
+}
